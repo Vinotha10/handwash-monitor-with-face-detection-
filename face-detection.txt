@@ -1,0 +1,8 @@
+onnx
+onnxruntime
+opencv-python
+numpy
+scikit-image
+faiss-cpu
+
+#cd face python main.py --source 0 --update-db

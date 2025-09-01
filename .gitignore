@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.env
+*.log
+
+# Virtual env
+venv/
+face_recognition/venv/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App artifacts
+handwash_log.csv
+*.mp4
+*.mov
+*.avi
