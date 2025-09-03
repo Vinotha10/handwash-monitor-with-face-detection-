@@ -38,7 +38,7 @@ def build_face_database(detector: SCRFD, recognizer: ArcFace, params: argparse.N
     face_db = FaceDatabase(db_path=params.db_path, max_workers=4)
 
     if not force_update and face_db.load():
-        logging.info("Loaded face database from disk.")
+        logging.info(f"Loaded face database with {len(face_db)} faces from disk.")
         return face_db
 
     logging.info("Building face database from images...")
@@ -46,35 +46,39 @@ def build_face_database(detector: SCRFD, recognizer: ArcFace, params: argparse.N
         logging.warning(f"Faces directory not found: {params.faces_dir}")
         return face_db
 
-    for filename in os.listdir(params.faces_dir):
-        if not (filename.endswith('.jpg') or filename.endswith('.png')):
+    # Walk through subfolders (person_name = folder)
+    for person_name in os.listdir(params.faces_dir):
+        person_folder = os.path.join(params.faces_dir, person_name)
+        if not os.path.isdir(person_folder):
             continue
 
-        name = filename.rsplit('.', 1)[0]
-        image_path = os.path.join(params.faces_dir, filename)
-        image = cv2.imread(image_path)
+        for filename in os.listdir(person_folder):
+            if not (filename.endswith('.jpg') or filename.endswith('.png')):
+                continue
 
-        if image is None:
-            logging.warning(f"Could not read image: {image_path}")
-            continue
+            image_path = os.path.join(person_folder, filename)
+            image = cv2.imread(image_path)
 
-        bboxes, kpss = detector.detect(image, max_num=1)
+            if image is None:
+                logging.warning(f"Could not read image: {image_path}")
+                continue
 
-        if len(kpss) == 0:
-            logging.warning(f"No face detected in {image_path}. Skipping...")
-            continue
+            bboxes, kpss = detector.detect(image, max_num=1)
+            if len(kpss) == 0:
+                logging.warning(f"No face detected in {image_path}. Skipping...")
+                continue
 
-        embedding = recognizer.get_embedding(image, kpss[0])
-        face_db.add_face(embedding, name)
-        logging.info(f"Added face for: {name}")
+            embedding = recognizer.get_embedding(image, kpss[0])
+            face_db.add_face(embedding, person_name)
+            logging.info(f"Added face for: {person_name}")
 
     face_db.save()
+    logging.info(f"Saved face database with {len(face_db)} total faces.")
     return face_db
-
 
 def frame_processor(frame: np.ndarray, detector: SCRFD, recognizer: ArcFace, face_db: FaceDatabase, colors: dict, params: argparse.Namespace):
     bboxes, kpss = detector.detect(frame, params.max_num)
-    detected_name = "Unknown"
+    detected_name = []
 
     if len(bboxes) == 0:
         return frame, detected_name
@@ -119,9 +123,15 @@ def main(params):
         if not ret:
             break
 
-        frame, name = frame_processor(frame, detector, recognizer, face_db, colors, params)
+        frame, names = frame_processor(frame, detector, recognizer, face_db, colors, params)
         out.write(frame)
         cv2.imshow("Face Recognition", frame)
+
+        # If you need only one name (for logging), you can join them:
+        if names:
+            logging.info(f"Detected: {', '.join(names)}")
+        else:
+            logging.info("No face detected")
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break

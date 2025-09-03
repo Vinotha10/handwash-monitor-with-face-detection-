@@ -6,9 +6,9 @@ import os
 import threading
 import queue
 import numpy as np
-from face_recognition.recognize import get_person_name, detector, recognizer, face_db
-
+from face_recognition.recognize import get_person_name, init_face_recognition
 import mediapipe as mp
+
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 try:
@@ -197,11 +197,54 @@ def draw_guidance_panel(img, steps, completed_steps, total_steps):
         cv2.putText(img, label, (x0 + 40, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.58, (230, 230, 230), 2)
 
+def detect_step(hands_pts, step_index):
+    """
+    Rule-based gesture detector for WHO handwash steps.
+    Very simplified heuristics for demo purposes.
+    """
+    if len(hands_pts) < 2:
+        return False
+
+    left, right = hands_pts[0], hands_pts[1]
+
+    def avg_point(pts, idx):
+        return np.mean([p[idx] for p in pts])
+
+    # Example rules (tuned heuristics):
+    if step_index == 0:  # Palms to palms
+        dist = math.hypot(avg_point(left,0)-avg_point(right,0),
+                          avg_point(left,1)-avg_point(right,1))
+        return dist < 200  # hands close together
+
+    elif step_index == 1:  # Backs of hands
+        return left[0][0] < right[0][0] or right[0][0] < left[0][0]
+
+    elif step_index == 2:  # Between fingers
+        return abs(avg_point(left,1)-avg_point(right,1)) > 50
+
+    elif step_index == 3:  # Around thumbs
+        return abs(left[4][0]-right[4][0]) < 50  # thumb tip close
+
+    elif step_index == 4:  # Nails & wrists
+        return left[8][1] > left[0][1] or right[8][1] > right[0][1]
+
+    return False
 
 # =========================
 # Main
 # =========================
 def main():
+
+    from face_recognition.recognize import get_person_name, init_face_recognition, detector, recognizer, face_db
+
+    init_face_recognition(
+        detector_weights="face_recognition/weights/det_10g.onnx",
+        recognizer_weights="face_recognition/weights/w600k_mbf.onnx",
+        db_path="face_recognition/database/face_database"
+    )
+
+    step_start_time = None
+
     roi_coords = None  
     cap = cv2.VideoCapture(CAM_INDEX)
     if not cap.isOpened():
@@ -290,12 +333,15 @@ def main():
 
                 if moving_enough and washing_active:
                     if step_index < len(GUIDE_STEPS):
-                        if step_start_time is None:
-                            step_start_time = now
-                        if now - step_start_time >= STEP_MIN_DURATION:
-                            step_index += 1
-                            step_start_time = now
-                            print(f"[DEBUG] Step {step_index}/{len(GUIDE_STEPS)} completed")
+                        if detect_step(hands_pts, step_index):
+                            if step_start_time is None:
+                                step_start_time = now
+                        if step_start_time is not None and now - step_start_time >= STEP_MIN_DURATION:
+                                step_index += 1
+                                step_start_time = now
+                                print(f"[INFO] Step {step_index}/{len(GUIDE_STEPS)} completed")
+                    else:
+                        step_start_time = None  # reset if wrong gesture
 
             else:
                 # hands not in zone
@@ -318,11 +364,10 @@ def main():
             # Only ask for name if session_person is None (new person)
 
             if session_person is None:
-                person = get_person_name(frame, detector, recognizer, face_db)
-                if person not in (None, "Unknown"):
+                person = get_person_name(frame)
+
+                if person is not None and person != "Unknown":
                     session_person = person
-                else:
-                    session_person = "Unknown"
 
             current_person = session_person
 
@@ -369,19 +414,8 @@ def main():
                 cv2.putText(frame, "Wash your hands!", (50, 100),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
 
-            if roi_coords is not None:
-                cv2.rectangle(frame, roi_coords[0], roi_coords[1], (0, 255, 255), 2)
-
             cv2.putText(frame, f"Detected: {current_person}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-
-            cv2.imshow("Handwash Monitor", frame)
-
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
-            elif key == ord("z"):
-                roi_coords = pick_roi_once(cap)
 
             # --------- VOICE PROMPTS ----------
             if ENABLE_VOICE and washing_active:
@@ -424,8 +458,9 @@ def main():
                     status=f"Incomplete ❌  {int(accumulated_sec)}/{TARGET_SECONDS}s" if accumulated_sec>0 else "Show both hands in zone!"
                     color=(0,120,255)
             draw_progress_bar(frame,min(progress,1.0),status,color)
+            cv2.imshow("Handwash Monitor", frame)
 
-            cv2.imshow("Real-time Handwash Monitor",frame)
+
             key=cv2.waitKey(1)&0xFF
             if key==ord('q'): break
             elif key==ord('r'):

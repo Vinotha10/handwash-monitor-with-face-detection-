@@ -23,3 +23,9 @@ vinotha,face_recognition\assets\faces\vinotha\img_22.jpg
 Pavithra,face_recognition\assets\faces\Pavithra\img_1.jpg
 pavithra,face_recognition\assets\faces\pavithra\img_2.jpg
 pavithra,face_recognition\assets\faces\pavithra\img_3.jpg
+sowmiya,face_recognition\assets\faces\sowmiya\img_1.jpg
+vinotha,C:\Users\Lenovo\handwash-monitor-main\face_recognition\assets\faces\vinotha\img_23.jpg
+vinotha,C:\Users\Lenovo\handwash-monitor-main\face_recognition\assets\faces\vinotha\img_24.jpg
+vinotha,C:\Users\Lenovo\handwash-monitor-main\face_recognition\assets\faces\vinotha\img_25.jpg
+vinotha,C:\Users\Lenovo\handwash-monitor-main\face_recognition\assets\faces\vinotha\img_23.jpg
+vinotha,C:\Users\Lenovo\handwash-monitor-main\face_recognition\assets\faces\vinotha\img_23.jpg

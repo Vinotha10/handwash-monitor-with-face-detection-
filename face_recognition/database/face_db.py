@@ -42,16 +42,12 @@ class FaceDatabase:
         # Stores associated names for each embedding
         self.metadata = []
 
-    def find_match(self, embedding: np.ndarray, threshold: float = 0.4) -> Tuple[Optional[str], Optional[float]]:
+    def find_match(self, embedding: np.ndarray, threshold: float = 0.5) -> Tuple[Optional[str], Optional[float]]:
         """
         Wrapper to search for a face in the database.
         Returns the name and similarity if a match is found, else (None, None)
         """
-        name, similarity = self.search(embedding, threshold)
-        if name == "Unknown":
-            return None, None
-        return name, similarity
-
+        return self.search(embedding, threshold)
 
     def add_face(self, embedding: np.ndarray, name: str) -> None:
         """
@@ -66,7 +62,7 @@ class FaceDatabase:
             self.index.add(np.array([normalized_embedding], dtype=np.float32))
             self.metadata.append(name)
 
-    def search(self, embedding: np.ndarray, threshold: float = 0.4) -> Tuple[str, float]:
+    def search(self, embedding: np.ndarray, threshold: float = 0.5) -> Tuple[str, float]:
         """
         Search for the closest face in the database.
 
@@ -109,10 +105,8 @@ class FaceDatabase:
         futures = [self.executor.submit(search_worker, emb) for emb in embeddings]
 
         # Gather results in order
-        results = []
-        for future in as_completed(futures):
-            results.append(future.result())
-
+        # Gather results in submission order (preserves bbox–embedding alignment)
+        results = [future.result() for future in futures]
         return results
 
     def add_faces_batch(self, embeddings: List[np.ndarray], names: List[str]) -> None:
@@ -154,6 +148,12 @@ class FaceDatabase:
                 logging.info(f"Loaded face database with {self.index.ntotal} faces")
             return True
         return False
+    
+    def __len__(self) -> int:
+        """
+        Return the number of faces in the database.
+        """
+        return self.index.ntotal  # or len(self.metadata), both should match
 
     def __del__(self):
         """
